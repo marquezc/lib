@@ -1,0 +1,41 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static char usage[] = "Usage: %s [-hv] [--help] [--version]\n";
+static char *progname;
+
+int cext (char *);
+
+int
+main (argc, argv)
+     int argc;
+     char *argv[];
+{
+  progname = argv[0];
+
+  if (argc != 2 || cext (argv[1]) != 0)
+    {
+      fprintf(stderr, usage, progname);
+    exit(1);
+    }
+}
+
+int
+cext (char *arg)
+{
+  int argloc = (int) strlen (arg) - 2;
+  return strcmp (arg + argloc, ".c");
+}
+
+
+
+
+
+
+
+
+
+
+
+
