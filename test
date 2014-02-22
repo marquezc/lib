@@ -2,32 +2,40 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char usage[] = "Usage: %s [-hv] [--help] [--version]\n";
-static char *progname;
+static char usage[] = "Usage: %s file\n";
+static char *progname, *filename;
 
-int cext (char *);
+int    cext(char *);
 
 int
-main (argc, argv)
-     int argc;
-     char *argv[];
+main(argc, argv)
+     int    argc;
+     char  *argv[];
 {
   progname = argv[0];
+  filename = argv[1];
 
-  if (argc != 2 || cext (argv[1]) != 0)
+  if (argc != 2 || cext(argv[1]) != 0)
     {
       fprintf(stderr, usage, progname);
-    exit(1);
+      exit(1);
+    }
+
+  FILE  *fp = fopen(filename, "r");
+
+  char   c;
+  while ((c = getc(fp)) != EOF)
+    {
+      putc(c, stdout);
     }
 }
 
 int
-cext (char *arg)
+cext(char *arg)
 {
-  int argloc = (int) strlen (arg) - 2;
-  return strcmp (arg + argloc, ".c");
+  int    argloc = (int) strlen(arg) - 2;
+  return strcmp(arg + argloc, ".c");
 }
-
 
 
 
