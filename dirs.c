@@ -4,8 +4,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-
 #define MAXFILENAME 255
+
+char *filename;
 
 int
 main(int argc, char *argv[])
@@ -19,11 +20,22 @@ main(int argc, char *argv[])
       exit(1);
     }
 
-  char   buf[MAXFILENAME];
+	char buf[MAXFILENAME];
+	filename = buf;
 
-  if ((dp = opendir(getcwd(buf, MAXFILENAME))) == NULL)
+	if (argc == 1)
+		getcwd(filename, MAXFILENAME);
+	else
+		filename = argv[1];
+
+  if ((dp = opendir(filename)) == NULL)
     {
       printf("Error: couldn't open %s\n", argv[1]);
       exit(1);
     }
+
+	while ((dirent = readdir(dp)) != NULL)
+		if (dirent->d_name[0] != '.')
+			printf("%s\n", dirent->d_name);
+		
 }
