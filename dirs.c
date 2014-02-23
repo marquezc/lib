@@ -37,5 +37,4 @@ main(int argc, char *argv[])
   while ((dirent = readdir(dp)) != NULL)
     if (dirent->d_name[0] != '.')
       printf("%s\n", dirent->d_name);
-
 }
