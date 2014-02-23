@@ -15,20 +15,20 @@ struct dtype
   char  *tag;
   int    cnt;
 } dtypes[] =
-{
-  {
-  " char ", 0},
-  {
-  " short ", 0},
-  {
-  " int ", 0},
-  {
-  " long ", 0},
-  {
-  " double ", 0},
-  {
-  " float ", 0}
-};
+	{
+		{
+			" char ", 0},
+		{
+			" short ", 0},
+		{
+			" int ", 0},
+		{
+			" long ", 0},
+		{
+			" double ", 0},
+		{
+			" float ", 0}
+	};
 
 int
 main(int argc, char *argv[])
@@ -48,12 +48,14 @@ main(int argc, char *argv[])
     {
       int    i;
       for (i = 0; i < 6; i++)
-	{
-	  struct dtype *dtype = &dtypes[i];
-	  if (strstr(buf, dtype->tag))
-	    fputs(buf, stdout);
-	}
+				{
+					struct dtype *dtype = &dtypes[i];
+					if (strstr(buf, dtype->tag))
+						fputs(buf, stdout);
+				}
     }
+	if (ferror(fp))
+		err_sys("Input error\n");
 }
 
 int
