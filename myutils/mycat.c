@@ -15,14 +15,11 @@
 #define MAXLINE 1000
 
 const char *progname;
-
-char *infiles[MAXFILES];
 char o_flags;
 
 void concat(const char *);
 void numline(char *, int *line);
-
-int isempty(const char *);
+int  isempty(const char *);
 
 int
 main(int argc, char *argv[])
