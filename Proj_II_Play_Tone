@@ -1,0 +1,1844 @@
+#include <reg932.inc>
+
+			CSEG at 0x0000
+
+;; -------------------------------------------------------------------------------
+;; INITIAL PROGRAM RUN
+;; -------------------------------------------------------------------------------
+
+			ACALL	INIT			; INITIALIZE BOARD AT PROGRAM START
+			LJMP	MAIN
+INF_LOOP:	
+			SJMP 	INF_LOOP
+
+	
+;; -------------------------------------------------------------------------------
+;; MAIN PROGRAM LOOP
+;; -------------------------------------------------------------------------------
+
+MAIN:		
+			JNB		P2.2,	PRESS_CNTR
+			JNB		P0.3,	RESET
+			JNB		P2.0,	CREATIVE_JMP_01
+			JNB		P0.1,	CREATIVE_JMP_02
+			SJMP	MAIN
+
+CREATIVE_JMP_01:
+			LJMP	CREATIVE_01
+
+CREATIVE_JMP_02:
+			LJMP	CREATIVE_02
+
+
+;; -------------------------------------------------------------------------------
+;; RESET AND REINITIALIZE
+;; -------------------------------------------------------------------------------
+WAIT_RESET:
+			JNB		P0.3,	RESET
+			SJMP	WAIT_RESET
+
+RESET:
+			CLR 	P0.7
+			JNB 	P0.3, 	RESET
+			SETB 	P0.7
+			ACALL 	DEBOUNCE
+			ACALL 	INIT
+			LJMP 	MAIN
+
+
+;; -------------------------------------------------------------------------------
+;; COUNT BUTTON HANDLER
+;; -------------------------------------------------------------------------------
+
+PRESS_CNTR:	
+			MOV 	R0,	#20		; TIMEOUT CONSTANT
+P_LOOP0:	MOV 	R1, #255
+P_LOOP1:	MOV 	R2, #255
+P_LOOP2:	JNB 	P2.2, BTN_HANDLER
+			DJNZ 	R2, P_LOOP2
+			DJNZ 	R1, P_LOOP1
+			DJNZ 	R0, P_LOOP0
+
+			ACALL 	CALCULATE
+			MOV		A, 73H
+			MOV		B, #00
+			CJNE	A, B, DIV_TEN
+			LJMP 	LTT_ERR
+
+DIV_TEN_RET:	
+			MOV		ACC, 7FH
+			JB		ACC.0, DIV_THREE
+DIV_THREE_RET:
+			MOV 	ACC, 7FH
+			JNB		ACC.0, DIV_FOUR
+DIV_FOUR_RET:
+			LJMP 	WAIT_RESET
+
+
+;; -------------------------------------------------------------------------------
+;; DIV_TEN:  PERFORM ACTION FOR GREATER THAN 10 PRESSES
+;; -------------------------------------------------------------------------------
+
+DIV_TEN:	
+			MOV 	A, 71H
+			MOV 	B, #00
+			CJNE	A, B, GRTR_THAN_TEN
+			LJMP 	DIV_TEN_RET
+GRTR_THAN_TEN:
+			ACALL 	REMAINDER_LEDS
+PLAY_BEAT_1:
+			MOV 	ACC, 71H
+BEAT_LOOP_1:	
+			ACALL 	PULSE_TONE_1
+			ACALL	PULSE_DLY
+			DJNZ 	ACC, BEAT_LOOP_1
+			LJMP 	DIV_TEN_RET
+
+
+;; -------------------------------------------------------------------------------
+;; DIV_THREE:	PERFORM ACTION FOR ODD NUMBER OF PRESSES ( >= 3 )
+;; -------------------------------------------------------------------------------
+
+DIV_THREE:
+			CLR		P2.5
+PLAY_BEAT_2:
+			MOV 	ACC, 73H
+BEAT_LOOP_2:	
+			ACALL 	PULSE_TONE_2
+			ACALL	PULSE_DLY
+			DJNZ 	ACC, BEAT_LOOP_2
+			
+			LJMP	DIV_THREE_RET
+
+
+;; -------------------------------------------------------------------------------
+;; DIV_FOUR:	PERFORM ACTION FOR EVEN NUMBER OF PRESSES ( >= 4 )
+;; -------------------------------------------------------------------------------
+
+DIV_FOUR:
+			CLR		P0.7
+PLAY_BEAT_3:
+			MOV 	ACC, 74H
+BEAT_LOOP_3:	
+			ACALL 	PULSE_TONE_3
+			ACALL	PULSE_DLY
+			DJNZ 	ACC, BEAT_LOOP_3
+
+			LJMP 	DIV_FOUR_RET
+
+
+;; -------------------------------------------------------------------------------
+;; LESS THAN THREE ERROR
+;; -------------------------------------------------------------------------------
+
+LTT_ERR:
+	ACALL 	ALL_LEDS_ON
+	LJMP	WAIT_RESET
+
+
+;; -------------------------------------------------------------------------------
+;; BUTTON HANDLER
+;; -------------------------------------------------------------------------------
+	
+BTN_HANDLER:	
+			CLR 	P2.6				
+			JNB 	P2.2, BTN_HANDLER	
+			SETB 	P2.6				
+			ACALL 	DEBOUNCE			
+			INC 	R3					
+			LJMP 	PRESS_CNTR
+
+
+;; -------------------------------------------------------------------------------
+;; SWITCH DEBOUNCER
+;; -------------------------------------------------------------------------------
+	
+DEBOUNCE:
+			MOV		R5, #200
+D_LOOP1:	MOV 	R6, #50
+D_LOOP2:	DJNZ 	R6, D_LOOP2
+			DJNZ 	R5, D_LOOP1	
+			RET
+
+
+;; -------------------------------------------------------------------------------
+;; DISPLAY BUTTON PRESS BALANCE ON LEDS
+;; -------------------------------------------------------------------------------
+
+REMAINDER_LEDS:
+			MOV 	ACC, 72H
+			JB 		ACC.0, LED_B0_ON
+LED_B0_RET:	JB 		ACC.1, LED_B1_ON
+LED_B1_RET:	JB 		ACC.2, LED_B2_ON
+LED_B2_RET:	JB 		ACC.3, LED_B3_ON
+LED_B3_RET: RET
+			
+LED_B0_ON:
+			CLR 	P0.4;
+			SJMP 	LED_B0_RET
+LED_B1_ON:
+			CLR 	P2.7;
+			SJMP 	LED_B1_RET
+
+LED_B2_ON:
+			CLR 	P0.5;
+			SJMP 	LED_B2_RET
+
+LED_B3_ON:
+			CLR 	P2.4;
+			SJMP 	LED_B3_RET
+
+
+;; -------------------------------------------------------------------------------
+;; 	PLAY A SPECIFIC BEAT
+;; -------------------------------------------------------------------------------
+
+SOUND_FXN:
+			ACALL 	PLAY_BEAT_1
+			ACALL 	PLAY_BEAT_2
+			ACALL 	PLAY_BEAT_3
+RET
+
+
+;; -------------------------------------------------------------------------------
+;;	PULSE A TONE FOR SHORT DURATION
+;; -------------------------------------------------------------------------------
+
+PULSE_TONE_1:
+				MOV		R2,	#1
+PULSE_LOOP_1A:	MOV		R3,	#200
+PULSE_LOOP_1B:	ACALL PLAY_TONE_1
+				DJNZ	R3,	PULSE_LOOP_1B
+				DJNZ	R2,	PULSE_LOOP_1A
+				RET
+
+PULSE_TONE_2:
+				MOV		R2,	#1
+PULSE_LOOP_2A:	MOV		R3,	#200
+PULSE_LOOP_2B:	ACALL PLAY_TONE_2
+				DJNZ	R3,	PULSE_LOOP_2B
+				DJNZ	R2,	PULSE_LOOP_2A
+				RET
+
+PULSE_TONE_3:
+				MOV		R2,	#1
+PULSE_LOOP_3A:	MOV		R3,	#200
+PULSE_LOOP_3B:	ACALL PLAY_TONE_3
+				DJNZ	R3,	PULSE_LOOP_3B
+				DJNZ	R2,	PULSE_LOOP_3A
+				RET
+
+
+;; -------------------------------------------------------------------------------
+;; SET THE DELAY BETWEEN TONE PULSES
+;; -------------------------------------------------------------------------------
+			
+PULSE_DLY:
+			MOV		R2, #10
+P_DLY_1:	MOV		R3, #200
+P_DLY_2:	MOV 	R4, #250
+P_DLY_3:	NOP
+			DJNZ	R4, P_DLY_3
+			DJNZ	R3, P_DLY_2
+			DJNZ	R2, P_DLY_1
+			RET
+
+
+;; -------------------------------------------------------------------------------
+;; PLAY A TONE
+;; -------------------------------------------------------------------------------
+
+PLAY_TONE_1:
+			CLR 	P1.7
+			ACALL 	TONE_1_DELAY
+			SETB 	P1.7
+			ACALL	TONE_1_DELAY
+			RET
+
+PLAY_TONE_2:
+			CLR 	P1.7
+			ACALL 	TONE_2_DELAY
+			SETB 	P1.7
+			ACALL	TONE_2_DELAY
+			RET
+
+PLAY_TONE_3:
+			CLR 	P1.7
+			ACALL 	TONE_3_DELAY
+			SETB 	P1.7
+			ACALL	TONE_3_DELAY
+			RET
+
+TONE_1_DELAY:
+			MOV 	R0,	#10
+T1_LOOP1:	MOV		R1, #250
+T1_LOOP2:	DJNZ	R1, T1_LOOP2
+			DJNZ	R0, T1_LOOP1
+			RET
+
+TONE_2_DELAY:
+			MOV 	R0,	#10
+T2_LOOP1:	MOV		R1, #175
+T2_LOOP2:	DJNZ	R1, T2_LOOP2
+			DJNZ	R0, T2_LOOP1
+			RET
+
+TONE_3_DELAY:
+			MOV 	R0,	#10
+T3_LOOP1:	MOV		R1, #100
+T3_LOOP2:	DJNZ	R1, T3_LOOP2
+			DJNZ	R0, T3_LOOP1
+			RET
+
+
+;; -------------------------------------------------------------------------------
+;; INITIALIZE THE BOARD
+;; -------------------------------------------------------------------------------
+
+INIT:
+			ACALL	MEM_INIT
+			ACALL	PORT_INIT
+			ACALL	ALL_LEDS_OFF
+			RET;
+
+
+;; -------------------------------------------------------------------------------
+;; PERFORM BUTTON PRESS CALCULATIONS
+;; -------------------------------------------------------------------------------
+
+CALCULATE:
+			;; STORE "COUNT"
+			MOV 	70H, R3
+
+			;; SET EVEN/ODD FLAG
+			MOV 	A, 70H
+			ANL 	A, #01
+			MOV 	7FH, A
+	
+			;; DIVIDE BY 10
+			MOV 	A, 70H
+			MOV 	B, #10
+			DIV 	AB
+			MOV 	71H, A
+			MOV 	72H, B
+
+			;; DIVIDE BY 3
+			MOV 	A, 70H
+			MOV 	B, #3
+			DIV 	AB
+			MOV 	73H, A
+
+			;; DIVIDE BY 4
+			MOV 	A, 70H
+			MOV 	B, #4
+			DIV 	AB
+			MOV 	74H, A
+
+			RET
+
+
+;; -------------------------------------------------------------------------------
+;; CLEAR RELEVANT REGISTERS AND MEMORY ADDRESSES
+;; -------------------------------------------------------------------------------
+
+MEM_INIT:
+			;; Clear Memory 60H - 65H;
+			MOV 	70H, #00		; "COUNT"
+			MOV 	71H, #00		; "N"  = COUNT / 10
+			MOV 	72H, #00		; "RN" = REM. COUNT / 10
+			MOV 	73H, #00		; "E"  = COUNT / 4
+			MOV 	74H, #00		; "D"  = COUNT / 3
+			MOV 	75H, #00
+			MOV 	76H, #00
+			MOV 	77H, #00
+			MOV 	78H, #00
+			MOV 	79H, #00
+			MOV 	7AH, #00
+			MOV 	7BH, #00
+			MOV 	7CH, #00
+			MOV 	7DH, #00
+			MOV 	7EH, #00
+
+			;; 7FH = FLAG BYTE
+			;; BIT_0: EVEN/ODD FLAG (1 IF "COUNT" ODD)
+			
+			MOV 	7FH, #00
+			
+			;; Clear Registers R0 - R7;
+			MOV		R0, #00
+			MOV 	R1,	#00
+			MOV 	R2, #00
+			MOV 	R3, #00
+			MOV 	R4, #00
+			MOV 	R5, #00
+			MOV 	R6, #00
+			MOV 	R7, #00
+			RET;
+
+
+;; -------------------------------------------------------------------------------
+;; SET PORT MODES
+;; -------------------------------------------------------------------------------
+
+PORT_INIT:
+			;; Configure Ports (Bidirectional)
+			MOV 	P0M1, #00;
+			MOV 	P1M1, #00;
+			MOV 	P2M1, #00;
+
+			RET;
+
+
+;; -------------------------------------------------------------------------------
+;; TURN ON LED ARRAY
+;; -------------------------------------------------------------------------------
+
+ALL_LEDS_ON:	
+			;; Clear LEDs
+			CLR 	P2.4		; LED 1
+			CLR 	P0.5		; LED 2
+			CLR 	P2.7		; LED 3
+			CLR 	P0.6		; LED 4
+			CLR 	P1.6		; LED 5
+			CLR 	P0.4		; LED 6
+			CLR 	P2.5		; LED 7
+			CLR 	P0.7		; LED 8
+			CLR 	P2.6		; LED 9
+			RET
+
+;; -------------------------------------------------------------------------------
+;; TURN OFF LED ARRAY
+;; -------------------------------------------------------------------------------
+
+ALL_LEDS_OFF:	
+			;; Clear LEDs
+			SETB 	P2.4		; LED 1
+			SETB 	P0.5		; LED 2
+			SETB 	P2.7		; LED 3
+			SETB 	P0.6		; LED 4
+			SETB 	P1.6		; LED 5
+			SETB 	P0.4		; LED 6
+			SETB 	P2.5		; LED 7
+			SETB 	P0.7		; LED 8
+			SETB 	P2.6		; LED 9
+			RET
+
+
+;; -------------------------------------------------------------------------------
+;; RHYTHM/SCALE DEMO
+;; -------------------------------------------------------------------------------
+
+CREATIVE_01:
+
+			ACALL	ALL_LEDS_OFF
+
+			MOV 	76H, #24
+
+			ACALL	QTR_C2
+			ACALL	QTR_D2
+			ACALL	QTR_E2
+			ACALL	QTR_F2
+			ACALL	QTR_G2
+			ACALL	QTR_A2
+			ACALL	QTR_B2
+			ACALL	QTR_C3
+
+			ACALL	ETH_C2
+			ACALL	ETH_D2
+			ACALL	ETH_E2
+			ACALL	ETH_F2
+			ACALL	ETH_G2
+			ACALL	ETH_A2
+			ACALL	ETH_B2
+			ACALL	ETH_C3
+
+			ACALL	SIX_C2
+			ACALL	SIX_D2
+			ACALL	SIX_E2
+			ACALL	SIX_F2
+			ACALL	SIX_G2
+			ACALL	SIX_A2
+			ACALL	SIX_B2
+			ACALL	SIX_C3
+			ACALL	SIX_D3
+			ACALL	SIX_E3
+			ACALL	SIX_F3
+			ACALL	QTR_G3
+			ACALL	SIX_F3
+			ACALL	SIX_E3
+			ACALL	SIX_D3
+			ACALL	SIX_C3
+			ACALL	SIX_B2
+			ACALL	SIX_A2
+			ACALL	SIX_G2
+			ACALL	SIX_F2
+			ACALL	SIX_E2
+			ACALL	SIX_D2
+			ACALL	QTR_C2
+
+			ACALL	ALL_LEDS_ON
+			LJMP	WAIT_RESET
+
+;; -------------------------------------------------------------------------------
+;; WHEN THE SAINTS GO MARCHING IN
+;; -------------------------------------------------------------------------------
+
+CREATIVE_02:
+
+			ACALL	ALL_LEDS_OFF
+			MOV 	76H, #18
+
+
+			ACALL	ETH_C2
+			ACALL	ETH_E2
+			ACALL	ETH_F2
+			ACALL	QTR_G2
+			ACALL	QTR_REST
+			ACALL	ETH_REST
+			ACALL	ETH_C2
+			ACALL	ETH_E2
+			ACALL	ETH_F2
+			ACALL	QTR_G2
+			ACALL	QTR_REST
+			ACALL	ETH_REST
+			ACALL	ETH_C2
+			ACALL	ETH_E2
+			ACALL	ETH_F2
+			ACALL	QTR_G2
+			ACALL	QTR_E2
+			ACALL	QTR_C2
+			ACALL	QTR_E2
+			ACALL	QTR_D2
+			ACALL	QTR_REST
+			ACALL	ETH_REST
+			ACALL	ETH_D2
+			ACALL	ETH_E2
+			ACALL	ETH_D2
+			ACALL	QTR_C2
+			ACALL	ETH_REST
+			ACALL	ETH_C2
+			ACALL	QTR_E2
+			ACALL	QTR_G2
+			ACALL	ETH_G2
+			ACALL	QTR_F2
+			ACALL	QTR_REST
+			ACALL	ETH_F2
+			ACALL	ETH_E2
+			ACALL	ETH_F2
+			ACALL	QTR_G2
+			ACALL	QTR_E2
+			ACALL	QTR_C2
+			ACALL	QTR_D2
+			ACALL	QTR_C2
+			ACALL	QTR_REST
+			ACALL	ETH_REST
+
+			ACALL	ALL_LEDS_ON
+			LJMP	
+	
+
+;CREATIVE_03:
+			;ACALL	ALL_LEDS_OFF
+
+			;MOV 	76H, #18
+
+			;ACALL	ETH_C2
+			;ACALL	ETH_E2
+			;ACALL	ETH_F2
+			;ACALL	QTR_G2
+			;ACALL	QTR_REST
+			;ACALL	ETH_REST
+			;ACALL	ETH_C2
+			;ACALL	ETH_E2
+			;ACALL	ETH_F2
+			;ACALL	QTR_G2
+			;ACALL	QTR_REST
+			;ACALL	ETH_REST
+			;ACALL	ETH_C2
+			;ACALL	ETH_E2
+			;ACALL	ETH_F2
+			;ACALL	QTR_G2
+			;ACALL	QTR_E2
+			;ACALL	QTR_C2
+			;ACALL	QTR_E2
+			;ACALL	QTR_D2
+			;ACALL	QTR_REST
+			;ACALL	ETH_REST
+			;ACALL	ETH_D2
+			;ACALL	ETH_E2
+			;ACALL	ETH_D2
+			;ACALL	QTR_C2
+			;ACALL	ETH_REST
+			;ACALL	ETH_C2
+			;ACALL	QTR_E2
+			;ACALL	QTR_G2
+			;ACALL	ETH_G2
+			;ACALL	QTR_F2
+			;ACALL	QTR_REST
+			;ACALL	ETH_F2
+			;ACALL	ETH_E2
+			;ACALL	ETH_F2
+			;ACALL	QTR_G2
+			;ACALL	QTR_E2
+			;ACALL	QTR_C2
+			;ACALL	QTR_D2
+			;ACALL	QTR_C2
+			;ACALL	QTR_REST
+			;ACALL	ETH_REST
+
+			;LJMP	MAIN
+
+
+;; -------------------------------------------------------------------------------
+;; REST TEMPO DEFINITIONS - USING C NOTE LENGTH FOR THE REST
+;; -------------------------------------------------------------------------------
+
+HALF_REST:
+			MOV		R1, 76H
+HREST_H1:	MOV		R2,	#32
+HREST_H2:	ACALL	CREATIVE_REST
+			DJNZ	R2,	HREST_H2
+			DJNZ	R1, HREST_H1
+			ACALL	NOTE_SEP
+			RET
+
+QTR_REST:
+			MOV		R1, 76H
+QREST_H1:	MOV		R2,	#16
+QREST_H2:	ACALL	CREATIVE_REST
+			DJNZ	R2,	QREST_H2
+			DJNZ	R1, QREST_H1
+			ACALL	NOTE_SEP
+			RET
+
+ETH_REST:
+			MOV		R1, 76H
+EREST_H1:	MOV		R2,	#8
+EREST_H2:	ACALL	CREATIVE_REST
+			DJNZ	R2,	EREST_H2
+			DJNZ	R1, EREST_H1
+			ACALL	NOTE_SEP
+			RET
+
+TRIP_REST:
+			MOV		R1, 76H
+TREST_H1:	MOV		R2,	#5
+TREST_H2:	ACALL	CREATIVE_REST
+			DJNZ	R2,	TREST_H2
+			DJNZ	R1, TREST_H1
+			ACALL	NOTE_SEP
+			RET
+
+SIX_REST:
+			MOV		R1, 76H
+SREST_H1:	MOV		R2,	#4
+SREST_H2:	ACALL	CREATIVE_REST
+			DJNZ	R2,	SREST_H2
+			DJNZ	R1, SREST_H1
+			ACALL	NOTE_SEP
+			RET
+
+;; -------------------------------------------------------------------------------
+;; C2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_C2:
+			CLR 	P2.4		; LED 1
+			CLR 	P0.5		; LED 2
+			CLR 	P2.7		; LED 3
+			CLR 	P0.6		; LED 4
+			CLR 	P0.4		; LED 6
+			CLR 	P2.5		; LED 7
+			CLR 	P0.7		; LED 8
+			CLR 	P2.6		; LED 9
+
+			MOV		R1, 76H
+QC2_H1:		MOV		R2,	#8
+QC2_H2:		ACALL	CREATIVE_C2
+			DJNZ	R2,	QC2_H2
+			DJNZ	R1, QC2_H1
+			ACALL	NOTE_SEP
+
+			SETB 	P2.4		; LED 1
+			SETB 	P0.5		; LED 2
+			SETB 	P2.7		; LED 3
+			SETB 	P0.6		; LED 4
+			SETB 	P0.4		; LED 6
+			SETB 	P2.5		; LED 7
+			SETB 	P0.7		; LED 8
+			SETB 	P2.6		; LED 9
+			RET
+
+ETH_C2:
+			CLR		P2.7
+			CLR 	P2.5
+
+			MOV		R1, 76H
+EC2_H1:		MOV		R2,	#4
+EC2_H2:		ACALL	CREATIVE_C2
+			DJNZ	R2,	EC2_H2
+			DJNZ	R1, EC2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.7
+			SETB	P2.5
+			RET
+
+SIX_C2:
+			CLR		P2.7
+			CLR 	P2.5
+
+			MOV		R1, 76H
+SC2_H1:		MOV		R2,	#2
+SC2_H2:		ACALL	CREATIVE_C2
+			DJNZ	R2,	SC2_H2
+			DJNZ	R1, SC2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.7
+			SETB	P2.5
+			RET
+
+;; -------------------------------------------------------------------------------
+;; D2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_D2:
+			CLR		P0.6
+
+			MOV		R1, 76H
+QD2_H1:		MOV		R2,	#9
+QD2_H2:		ACALL	CREATIVE_D2
+			DJNZ	R2,	QD2_H2
+			DJNZ	R1, QD2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P0.6
+			RET
+
+ETH_D2:
+			CLR		P0.6
+
+			MOV		R1, 76H
+ED2_H1:		MOV		R2,	#4
+ED2_H2:		ACALL	CREATIVE_D2
+			DJNZ	R2,	ED2_H2
+			DJNZ	R1, ED2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P0.6
+			RET
+
+SIX_D2:
+			CLR		P0.6
+
+			MOV		R1, 76H
+SD2_H1:		MOV		R2,	#2
+SD2_H2:		ACALL	CREATIVE_D2
+			DJNZ	R2,	SD2_H2
+			DJNZ	R1, SD2_H1
+			ACALL	NOTE_SEP
+			RET
+
+;; -------------------------------------------------------------------------------
+;; E2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_E2:
+			CLR		P2.4
+			CLR		P2.6
+
+			MOV		R1, 76H
+QE2_H1:		MOV		R2,	#10
+QE2_H2:		ACALL	CREATIVE_E2
+			DJNZ	R2,	QE2_H2
+			DJNZ	R1, QE2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.4
+			SETB	P2.6
+			RET
+
+ETH_E2:
+			CLR		P2.4
+			CLR		P2.6
+
+			MOV		R1, 76H
+EE2_H1:		MOV		R2,	#5
+EE2_H2:		ACALL	CREATIVE_E2
+			DJNZ	R2,	EE2_H2
+			DJNZ	R1, EE2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.4
+			SETB	P2.6
+			RET
+
+SIX_E2:
+			CLR		P2.4
+			CLR		P2.6
+
+			MOV		R1, 76H
+SE2_H1:		MOV		R2,	#2
+SE2_H2:		ACALL	CREATIVE_E2
+			DJNZ	R2,	SE2_H2
+			DJNZ	R1, SE2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.4
+			SETB	P2.6
+			RET
+
+;; -------------------------------------------------------------------------------
+;; F2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+F_LEDS_ON:
+			CLR		P2.4
+			CLR		P2.7
+			CLR		P2.5
+			CLR		P2.6
+			RET
+
+F_LEDS_OFF:
+			SETB	P2.4
+			SETB	P2.7
+			SETB	P2.5
+			SETB	P2.6
+			RET
+
+QTR_F2:
+			ACALL	F_LEDS_ON
+
+			MOV		R1, 76H
+QF2_H1:		MOV		R2,	#11
+QF2_H2:		ACALL	CREATIVE_F2
+			DJNZ	R2,	QF2_H2
+			DJNZ	R1, QF2_H1
+			ACALL	NOTE_SEP
+
+			ACALL	F_LEDS_OFF
+			RET
+
+ETH_F2:
+			ACALL	F_LEDS_ON
+
+			MOV		R1, 76H
+EF2_H1:		MOV		R2,	#5
+EF2_H2:		ACALL	CREATIVE_F2
+			DJNZ	R2,	EF2_H2
+			DJNZ	R1, EF2_H1
+			ACALL	NOTE_SEP
+
+			ACALL	F_LEDS_OFF
+			RET
+
+SIX_F2:
+			ACALL	F_LEDS_ON
+
+			MOV		R1, 76H
+SF2_H1:		MOV		R2,	#3
+SF2_H2:		ACALL	CREATIVE_F2
+			DJNZ	R2,	SF2_H2
+			DJNZ	R1, SF2_H1
+			ACALL	NOTE_SEP
+
+			ACALL	F_LEDS_OFF
+			RET
+
+;; -------------------------------------------------------------------------------
+;; G2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+G_LEDS_OFF:	
+			SETB		P0.5
+			SETB		P0.6
+			SETB		P0.4
+			SETB		P0.7	
+			RET
+
+G_LEDS_ON:
+			CLR		P0.5
+			CLR		P0.6
+			CLR		P0.4
+			CLR		P0.7
+			RET
+QTR_G2:
+			ACALL	G_LEDS_ON
+
+			MOV		R1, 76H
+QG2_H1:		MOV		R2,	#12
+QG2_H2:		ACALL	CREATIVE_G2
+			DJNZ	R2,	QG2_H2
+			DJNZ	R1, QG2_H1
+			ACALL	NOTE_SEP
+
+			ACALL	G_LEDS_OFF
+			RET
+
+ETH_G2:
+			ACALL	G_LEDS_ON
+
+			MOV		R1, 76H
+EG2_H1:		MOV		R2,	#6
+EG2_H2:		ACALL	CREATIVE_G2
+			DJNZ	R2,	EG2_H2
+			DJNZ	R1, EG2_H1
+			ACALL	NOTE_SEP
+
+			ACALL	G_LEDS_OFF
+			RET
+
+SIX_G2:
+			ACALL	G_LEDS_ON
+
+			MOV		R1, 76H
+SG2_H1:		MOV		R2,	#3
+SG2_H2:		ACALL	CREATIVE_G2
+			DJNZ	R2,	SG2_H2
+			DJNZ	R1, SG2_H1
+			ACALL	NOTE_SEP
+
+			ACALL	G_LEDS_OFF
+			RET
+
+;; -------------------------------------------------------------------------------
+;; A2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_A2:
+			CLR		P1.6
+
+			MOV		R1, 76H
+QA2_H1:		MOV		R2,	#13
+QA2_H2:		ACALL	CREATIVE_A2
+			DJNZ	R2,	QA2_H2
+			DJNZ	R1, QA2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P1.6
+			RET
+
+ETH_A2:
+			CLR		P1.6
+
+			MOV		R1, 76H
+EA2_H1:		MOV		R2,	#6
+EA2_H2:		ACALL	CREATIVE_A2
+			DJNZ	R2,	EA2_H2
+			DJNZ	R1, EA2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P1.6
+			RET
+
+SIX_A2:
+			CLR		P1.6
+
+			MOV		R1, 76H
+SA2_H1:		MOV		R2,	#3
+SA2_H2:		ACALL	CREATIVE_A2
+			DJNZ	R2,	SA2_H2
+			DJNZ	R1, SA2_H1
+			ACALL	NOTE_SEP
+
+			SETB	P1.6
+			RET
+
+;; -------------------------------------------------------------------------------
+;; B2 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_B2:
+			MOV		R1, 76H
+QB2_H1:		MOV		R2,	#15
+QB2_H2:		ACALL	CREATIVE_B2
+			DJNZ	R2,	QB2_H2
+			DJNZ	R1, QB2_H1
+			ACALL	NOTE_SEP
+			RET
+
+ETH_B2:
+			MOV		R1, 76H
+EB2_H1:		MOV		R2,	#7
+EB2_H2:		ACALL	CREATIVE_B2
+			DJNZ	R2,	EB2_H2
+			DJNZ	R1, EB2_H1
+			ACALL	NOTE_SEP
+			RET
+
+SIX_B2:
+			MOV		R1, 76H
+SB2_H1:		MOV		R2,	#4
+SB2_H2:		ACALL	CREATIVE_B2
+			DJNZ	R2,	SB2_H2
+			DJNZ	R1, SB2_H1
+			ACALL	NOTE_SEP
+			RET
+
+;; -------------------------------------------------------------------------------
+;; C3 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_C3:
+			CLR		P2.7
+			CLR 	P2.5
+
+			MOV		R1, 76H
+QC3_H1:		MOV		R2,	#16
+QC3_H2:		ACALL	CREATIVE_C3
+			DJNZ	R2,	QC3_H2
+			DJNZ	R1, QC3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.7
+			SETB	P2.5
+			RET
+
+ETH_C3:
+			CLR		P2.7
+			CLR 	P2.5
+
+			MOV		R1, 76H
+EC3_H1:		MOV		R2,	#8
+EC3_H2:		ACALL	CREATIVE_C3
+			DJNZ	R2,	EC3_H2
+			DJNZ	R1, EC3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.7
+			SETB	P2.5
+			RET
+
+SIX_C3:
+			CLR		P2.7
+			CLR 	P2.5
+
+			MOV		R1, 76H
+SC3_H1:		MOV		R2,	#4
+SC3_H2:		ACALL	CREATIVE_C3
+			DJNZ	R2,	SC3_H2
+			DJNZ	R1, SC3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.7
+			SETB	P2.5
+			RET
+
+;; -------------------------------------------------------------------------------
+;; D3 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_D3:
+			CLR		P0.6
+
+			MOV		R1, 76H
+QD3_H1:		MOV		R2,	#18
+QD3_H2:		ACALL	CREATIVE_D3
+			DJNZ	R2,	QD3_H2
+			DJNZ	R1, QD3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P0.6
+			RET
+
+ETH_D3:
+			CLR		P0.6
+
+			MOV		R1, 76H
+ED3_H1:		MOV		R2,	#9
+ED3_H2:		ACALL	CREATIVE_D3
+			DJNZ	R2,	ED3_H2
+			DJNZ	R1, ED3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P0.6
+			RET
+
+SIX_D3:
+			CLR		P0.6
+
+			MOV		R1, 76H
+SD3_H1:		MOV		R2,	#4
+SD3_H2:		ACALL	CREATIVE_D3
+			DJNZ	R2,	SD3_H2
+			DJNZ	R1, SD3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P0.6
+			RET
+
+;; -------------------------------------------------------------------------------
+;; E3 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_E3:
+			CLR		P2.4
+			CLR		P2.6
+
+			MOV		R1, 76H
+QE3_H1:		MOV		R2,	#20
+QE3_H2:		ACALL	CREATIVE_E3
+			DJNZ	R2,	QE3_H2
+			DJNZ	R1, QE3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.4
+			SETB	P2.6
+			RET
+
+ETH_E3:
+			CLR		P2.4
+			CLR		P2.6
+
+			MOV		R1, 76H
+EE3_H1:		MOV		R2,	#10
+EE3_H2:		ACALL	CREATIVE_E3
+			DJNZ	R2,	EE3_H2
+			DJNZ	R1, EE3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.4
+			SETB	P2.6
+			RET
+
+SIX_E3:
+			CLR		P2.4
+			CLR		P2.6
+
+			MOV		R1, 76H
+SE3_H1:		MOV		R2,	#5
+SE3_H2:		ACALL	CREATIVE_E3
+			DJNZ	R2,	SE3_H2
+			DJNZ	R1, SE3_H1
+			ACALL	NOTE_SEP
+
+			SETB	P2.4
+			SETB	P2.6
+			RET
+
+;; -------------------------------------------------------------------------------
+;; F3 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_F3:
+			ACALL	F_LEDS_ON
+
+			MOV		R1, 76H
+QF3_H1:		MOV		R2,	#21
+QF3_H2:		ACALL	CREATIVE_F3
+			DJNZ	R2,	QF3_H2
+			DJNZ	R1, QF3_H1
+			ACALL	NOTE_SEP
+
+			ACALL	F_LEDS_OFF
+			RET
+
+ETH_F3:
+			ACALL	F_LEDS_ON
+
+			MOV		R1, 76H
+EF3_H1:		MOV		R2,	#10
+EF3_H2:		ACALL	CREATIVE_F3
+			DJNZ	R2,	EF3_H2
+			DJNZ	R1, EF3_H1
+			ACALL	NOTE_SEP
+
+			ACALL	F_LEDS_OFF
+			RET
+
+SIX_F3:
+			ACALL	F_LEDS_ON
+
+			MOV		R1, 76H
+SF3_H1:		MOV		R2,	#5
+SF3_H2:		ACALL	CREATIVE_F3
+			DJNZ	R2,	SF3_H2
+			DJNZ	R1, SF3_H1
+			ACALL	NOTE_SEP
+
+			ACALL	F_LEDS_OFF
+			RET
+
+;; -------------------------------------------------------------------------------
+;; G3 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+QTR_G3:
+			ACALL	G_LEDS_ON
+
+			MOV		R1, 76H
+QG3_H1:		MOV		R2,	#24
+QG3_H2:		ACALL	CREATIVE_G3
+			DJNZ	R2,	QG3_H2
+			DJNZ	R1, QG3_H1
+			ACALL	NOTE_SEP
+
+			ACALL	G_LEDS_OFF
+			RET
+
+ETH_G3:
+			ACALL	G_LEDS_ON
+
+			MOV		R1, 76H
+EG3_H1:		MOV		R2,	#12
+EG3_H2:		ACALL	CREATIVE_G3
+			DJNZ	R2,	EG3_H2
+			DJNZ	R1, EG3_H1
+			ACALL	NOTE_SEP
+
+			ACALL	G_LEDS_OFF
+			RET
+
+SIX_G3:
+			ACALL	G_LEDS_ON
+
+			MOV		R1, 76H
+SG3_H1:		MOV		R2,	#6
+SG3_H2:		ACALL	CREATIVE_G3
+			DJNZ	R2,	SG3_H2
+			DJNZ	R1, SG3_H1
+			ACALL	NOTE_SEP
+
+			ACALL	G_LEDS_OFF
+			RET
+
+
+;; -------------------------------------------------------------------------------
+;; A3 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+;QTR_A3:
+			;CLR		P1.6
+
+			;MOV		R1, 76H
+;QA3_H1:		MOV		R2,	#27
+;QA3_H2:		ACALL	CREATIVE_A3
+			;DJNZ	R2,	QA3_H2
+			;DJNZ	R1, QA3_H1
+			;ACALL	NOTE_SEP
+
+			;SETB	P1.6
+			;RET
+
+;ETH_A3:
+			;CLR		P1.6
+
+			;MOV		R1, 76H
+;EA3_H1:		MOV		R2,	#13
+;EA3_H2:		ACALL	CREATIVE_A3
+			;DJNZ	R2,	EA3_H2
+			;DJNZ	R1, EA3_H1
+			;ACALL	NOTE_SEP
+
+			;SETB	P1.6
+			;RET
+
+;SIX_A3:
+			;CLR		P1.6
+
+			;MOV		R1, 76H
+;SA3_H1:		MOV		R2,	#7
+;SA3_H2:		ACALL	CREATIVE_A3
+			;DJNZ	R2,	SA3_H2
+			;DJNZ	R1, SA3_H1
+			;ACALL	NOTE_SEP
+
+			;SETB	P1.6
+			;RET
+
+;;; -------------------------------------------------------------------------------
+;;; B3 TEMPO DEFINITIONS
+;;; -------------------------------------------------------------------------------
+
+;QTR_B3:
+			;MOV		R1, 76H
+;QB3_H1:		MOV		R2,	#30
+;QB3_H2:		ACALL	CREATIVE_B3
+			;DJNZ	R2,	QB3_H2
+			;DJNZ	R1, QB3_H1
+			;ACALL	NOTE_SEP
+			;RET
+
+;ETH_B3:
+			;MOV		R1, 76H
+;EB3_H1:		MOV		R2,	#15
+;EB3_H2:		ACALL	CREATIVE_B3
+			;DJNZ	R2,	EB3_H2
+			;DJNZ	R1, EB3_H1
+			;ACALL	NOTE_SEP
+			;RET
+
+;SIX_B3:
+			;MOV		R1, 76H
+;SB3_H1:		MOV		R2,	#7
+;SB3_H2:		ACALL	CREATIVE_B3
+			;DJNZ	R2,	SB3_H2
+			;DJNZ	R1, SB3_H1
+			;ACALL	NOTE_SEP
+			;RET
+
+;; -------------------------------------------------------------------------------
+;; C4 TEMPO DEFINITIONS
+;; -------------------------------------------------------------------------------
+
+;QTR_C4:
+			;MOV		R1, 76H
+;QC4_H1:		MOV		R2,	#32
+;QC4_H2:		ACALL	CREATIVE_C4
+			;DJNZ	R2,	QC4_H2
+			;DJNZ	R1, QC4_H1
+			;ACALL	NOTE_SEP
+			;RET
+
+;ETH_C4:
+			;MOV		R1, 76H
+;EC4_H1:		MOV		R2,	#16
+;EC4_H2:		ACALL	CREATIVE_C4
+			;DJNZ	R2,	EC4_H2
+			;DJNZ	R1, EC4_H1
+			;ACALL	NOTE_SEP
+			;RET
+
+;SIX_C4:
+			;MOV		R1, 76H
+;SC4_H1:		MOV		R2,	#8
+;SC4_H2:		ACALL	CREATIVE_C4
+			;DJNZ	R2,	SC4_H2
+			;DJNZ	R1, SC4_H1
+			;ACALL	NOTE_SEP
+			;RET
+
+
+;; -------------------------------------------------------------------------------
+;; DEFINE NOTE SEPARATION DELAY
+;; -------------------------------------------------------------------------------
+
+NOTE_SEP:
+			MOV		R6, #250
+NS1:		MOV		R7, #160
+NS2:		DJNZ	R7, NS2
+			DJNZ	R6, NS1
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE REST WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_REST:
+        	NOP
+			MOV		R7,	#224
+HERE_REST:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_REST
+
+			NOP
+			MOV		R7,	#224
+HERE2_REST:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP	
+			DJNZ	R7, HERE2_REST
+			RET
+
+;;; -------------------------------------------------------------------------------
+;;; DEFINE C2 WAVE (SINGLE PERIOD)
+;;; -------------------------------------------------------------------------------
+
+CREATIVE_C2:
+        	CLR		P1.7
+			MOV		R7,	#246
+HERE_C2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_C2
+
+			SETB	P1.7
+			MOV		R7,	#246
+HERE2_C2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE2_C2
+			RET
+
+;;; -------------------------------------------------------------------------------
+;;; DEFINE D2 WAVE (SINGLE PERIOD)
+;;; -------------------------------------------------------------------------------
+
+CREATIVE_D2:
+        	CLR		P1.7
+			MOV		R7,	#244
+HERE_D2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_D2
+
+			SETB	P1.7
+			MOV		R7,	#244
+HERE2_D2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7, HERE2_D2
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE E2 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_E2:
+        	CLR		P1.7
+			MOV		R7,	#230
+HERE_E2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_E2
+
+			SETB	P1.7
+			MOV		R7,	#230
+HERE2_E2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE2_E2
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE F2 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_F2:
+        	CLR		P1.7
+			MOV		R7,	#246
+HERE_F2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_F2
+
+			SETB	P1.7
+			MOV		R7,	#246
+HERE2_F2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7, HERE2_F2
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE G2 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_G2:
+        	CLR		P1.7
+			MOV		R7,	#253
+HERE_G2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_G2
+
+			SETB	P1.7
+			MOV		R7,	#253
+HERE2_G2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP	
+			DJNZ	R7, HERE2_G2
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE A2 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_A2:
+        	CLR		P1.7
+			MOV		R7,	#244
+HERE_A2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_A2
+
+			SETB	P1.7
+			MOV		R7,	#244
+HERE2_A2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP	
+			NOP
+			DJNZ	R7, HERE2_A2
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE B2 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_B2:
+        	CLR		P1.7
+			MOV		R7,	#237
+HERE_B2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_B2
+
+			SETB	P1.7
+			MOV		R7,	#237
+HERE2_B2:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP	
+			DJNZ	R7, HERE2_B2
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE C3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_C3:
+        	CLR		P1.7
+			MOV		R7,	#224
+HERE_C3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_C3
+
+			SETB	P1.7
+			MOV		R7,	#224
+HERE2_C3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP	
+			DJNZ	R7, HERE2_C3
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE D3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_D3:
+        	CLR		P1.7
+			MOV		R7,	#244
+HERE_D3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_D3
+
+			SETB	P1.7
+			MOV		R7,	#244
+HERE2_D3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP	
+			DJNZ	R7, HERE2_D3
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE E3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_E3:
+        	CLR		P1.7
+			MOV		R7,	#217
+HERE_E3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_E3
+
+			SETB	P1.7
+			MOV		R7,	#217
+HERE2_E3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7, HERE2_E3
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE F3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_F3:
+        	CLR		P1.7
+			MOV		R7,	#205
+HERE_F3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_F3
+
+			SETB	P1.7
+			MOV		R7,	#205
+HERE2_F3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7, HERE2_F3
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE G3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+CREATIVE_G3:
+        	CLR		P1.7
+			MOV		R7,	#235
+HERE_G3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7,	HERE_G3
+
+			SETB	P1.7
+			MOV		R7,	#235
+HERE2_G3:	NOP
+			NOP
+			NOP
+			NOP
+			NOP
+			DJNZ	R7, HERE2_G3
+			RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE A3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+;CREATIVE_A3:
+        	;CLR		P1.7
+			;MOV		R7,	#244
+;HERE_A3:	NOP
+			;NOP
+			;NOP
+			;NOP
+			;DJNZ	R7,	HERE_A3
+
+			;SETB	P1.7
+			;MOV		R7,	#244
+;HERE2_A3:	NOP
+			;NOP
+			;NOP
+			;NOP
+			;DJNZ	R7, HERE2_A3
+			;RET
+
+;; -------------------------------------------------------------------------------
+;; DEFINE B3 WAVE (SINGLE PERIOD)
+;; -------------------------------------------------------------------------------
+
+;CREATIVE_B3:
+        	;CLR		P1.7
+			;MOV		R7,	#163
+;HERE_B3:	NOP
+			;NOP
+			;NOP
+			;NOP
+			;NOP
+			;NOP
+			;DJNZ	R7,	HERE_B3
+			;SETB	P1.7
+			;MOV		R7,	#163
+;HERE2_B3:	NOP
+			;NOP
+			;NOP
+			;NOP
+			;NOP
+			;NOP
+			;DJNZ	R7, HERE2_B3
+			;RET
+
+;;; -------------------------------------------------------------------------------
+;;; DEFINE C4 WAVE (SINGLE PERIOD)
+;;; -------------------------------------------------------------------------------
+
+;CREATIVE_C4:
+			;CLR		P1.7
+			;MOV		R7,	#246
+;HERE_C4:	NOP
+			;NOP
+			;NOP
+			;DJNZ	R7,	HERE_C4
+			;SETB	P1.7
+			;MOV		R7,	#246
+;HERE2_C4:	NOP
+			;NOP
+			;NOP	
+			;DJNZ	R7, HERE2_C4
+			;RET
+
+END
